@@ -41,7 +41,6 @@ TAU = 1e-3              # for soft update of target parameters
 LR_ACTOR = 1e-4         # learning rate of the actor
 LR_CRITIC = 1e-3        # learning rate of the critic
 WEIGHT_DECAY = 0        # L2 weight decay of the critic
-ACTOR_WEIGHT_DECAY = 0  # starting L2 weight decay of the actor (train.py lowers it once agents improve)
 LEARN_EVERY = 1        # learn once every LEARN_EVERY environment steps...
 LEARN_TIMES = 1         # ...and run LEARN_TIMES updates (per agent) each time
 
@@ -57,11 +56,7 @@ class Agent():
         # Actor: sees only this agent's observation
         self.actor_local = Actor(state_size, action_size, random_seed).to(device)
         self.actor_target = Actor(state_size, action_size, random_seed).to(device)
-        # Weight decay keeps the actor's weights (and so its raw, pre-tanh outputs) small.
-        # Without it, the actor follows the critic's tiny, meaningless early hints all the way
-        # until tanh saturates (actions stuck at +-1), and then it can't learn any more.
-        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR,
-                                          weight_decay=ACTOR_WEIGHT_DECAY)
+        self.actor_optimizer = optim.Adam(self.actor_local.parameters(), lr=LR_ACTOR)
 
         # Critic: sees the full state and all actions
         full_state_size = state_size * num_agents
@@ -166,20 +161,6 @@ class MADDPG():
         """Reset the noise of every agent (call at the start of each episode)."""
         self.noise.reset()
 
-    @property
-    def actor_weight_decay(self):
-        """The actors' current weight decay (the same for every agent)."""
-        return self.agents[0].actor_optimizer.param_groups[0]['weight_decay']
-
-    def set_actor_weight_decay(self, value):
-        """Change the actors' weight decay during training.
-
-        The optimizers' state_dicts include it, so save()/load() keep the current value.
-        """
-        for agent in self.unique_agents:
-            for group in agent.actor_optimizer.param_groups:
-                group['weight_decay'] = value
-
     def learn(self, agent_i, experiences, gamma):
         """Update the actor and critic of ONE agent (agent_i) from a batch of experience.
 
@@ -259,8 +240,9 @@ class MADDPG():
     def save(self, path, **extra):
         """Save everything needed to continue training later.
 
-        Saves every agent's local AND target networks plus both optimizers, and the
-        current noise scale. The replay buffer is not saved (it would be huge).
+        Saves the local AND target networks plus both optimizers of every DISTINCT agent
+        (one entry when shared, one per racket when separate), and the current noise scale.
+        The replay buffer is not saved (it would be huge).
 
         Params
         ======
@@ -278,7 +260,7 @@ class MADDPG():
                 'critic_target': a.critic_target.state_dict(),
                 'actor_optimizer': a.actor_optimizer.state_dict(),
                 'critic_optimizer': a.critic_optimizer.state_dict(),
-            } for a in self.agents],      # when shared, both entries hold the same networks
+            } for a in self.unique_agents],
             'noise_scale': float(self.noise_scale),
             'shared': self.shared,
         }
@@ -297,7 +279,9 @@ class MADDPG():
             raise ValueError('{} was trained with shared={}, but this agent has shared={}. '
                              'Use the same setting (train.py: --separate for shared=False).'
                              .format(path, saved_shared, self.shared))
-        for a, saved in zip(self.agents, checkpoint['agents']):
+        # one entry per distinct agent. (Older shared checkpoints held two identical entries;
+        # zip simply uses the first one, so they still load.)
+        for a, saved in zip(self.unique_agents, checkpoint['agents']):
             a.actor_local.load_state_dict(saved['actor_local'])
             a.actor_target.load_state_dict(saved['actor_target'])
             a.critic_local.load_state_dict(saved['critic_local'])
@@ -307,15 +291,29 @@ class MADDPG():
         self.noise_scale = checkpoint['noise_scale']
         return checkpoint
 
+    def weight_files(self, prefix='checkpoint', kind='actor'):
+        """File names for the plain weights:
+        shared   -> one network:          checkpoint_actor.pth
+        separate -> one per racket:       checkpoint_actor_0.pth, checkpoint_actor_1.pth
+        """
+        if self.shared:
+            return ['{}_{}.pth'.format(prefix, kind)]
+        return ['{}_{}_{}.pth'.format(prefix, kind, i) for i in range(len(self.unique_agents))]
+
     def save_weights(self, prefix='checkpoint'):
-        """Save plain actor/critic weights per agent, e.g. checkpoint_actor_0.pth (for the submission)."""
-        for i, a in enumerate(self.agents):
-            torch.save(a.actor_local.state_dict(), '{}_actor_{}.pth'.format(prefix, i))
-            torch.save(a.critic_local.state_dict(), '{}_critic_{}.pth'.format(prefix, i))
+        """Save plain actor/critic weights (for the submission), one file per distinct network."""
+        for a, actor_file, critic_file in zip(self.unique_agents,
+                                              self.weight_files(prefix, 'actor'),
+                                              self.weight_files(prefix, 'critic')):
+            torch.save(a.actor_local.state_dict(), actor_file)
+            torch.save(a.critic_local.state_dict(), critic_file)
 
     def load_actor_weights(self, paths):
-        """Load plain actor weights, one file per agent (e.g. for test.py)."""
-        for a, path in zip(self.agents, paths):
+        """Load plain actor weights, one file per distinct network (1 if shared, 1 per racket if not)."""
+        if len(paths) != len(self.unique_agents):
+            raise ValueError('Expected {} actor file(s) for shared={}, got {}: {}'
+                             .format(len(self.unique_agents), self.shared, len(paths), paths))
+        for a, path in zip(self.unique_agents, paths):
             a.actor_local.load_state_dict(torch.load(path, map_location=device))
 
 

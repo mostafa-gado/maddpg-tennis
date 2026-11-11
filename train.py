@@ -52,11 +52,6 @@ def parse_args():
     p.add_argument('--noise-min', type=float, default=0, help='the noise scale never goes below this')
     p.add_argument('--separate', action='store_true',
                    help='give each racket its own actor and critic (default: both share one)')
-    p.add_argument('--wd-start-score', type=float, default=0.05,
-                   help="start lowering the actors' weight decay once the 100-episode average reaches this")
-    p.add_argument('--wd-decay', type=float, default=0,
-                   help="actors' weight decay is multiplied by this every episode (while above --wd-start-score)")
-    p.add_argument('--wd-min', type=float, default=1e-5, help="the actors' weight decay never goes below this")
     p.add_argument('--warmup-episodes', type=int, default=500,
                    help='random-action episodes that only fill the replay buffer, before learning starts')
     p.add_argument('--seed', type=int, default=2, help='random seed')
@@ -157,9 +152,8 @@ def main():
         # resume: networks, optimizers, score history and noise scale
         checkpoint = agent.load(args.checkpoint)
         scores = checkpoint['scores']
-        log.info('Resumed from %s after %d episodes (last 100 avg: %.3f, noise scale: %.3f, actor WD: %.1e)',
-                 args.checkpoint, len(scores), np.mean(scores[-100:]), agent.noise_scale,
-                 agent.actor_weight_decay)
+        log.info('Resumed from %s after %d episodes (last 100 avg: %.3f, noise scale: %.3f)',
+                 args.checkpoint, len(scores), np.mean(scores[-100:]), agent.noise_scale)
     else:
         log.info('Starting fresh')
 
@@ -199,18 +193,8 @@ def main():
             score = float(np.max(episode_scores))
             scores.append(score)
             scores_deque.append(score)
-
-            # Lower the actors' weight decay, but ONLY while the agents play well enough
-            # (100-episode average >= --wd-start-score). Strong decay protects the actors early,
-            # while the critic still knows nothing; once they really hit the ball, the critic gives
-            # real hints and the actors can be freed to make sharper moves. If the average drops
-            # below the threshold again, the decay pauses at its current value.
-            if np.mean(scores_deque) >= args.wd_start_score:
-                agent.set_actor_weight_decay(max(args.wd_min, agent.actor_weight_decay * args.wd_decay))
-
-            log.info('Episode %d\tScore: %.3f\tAverage (last 100): %.3f\tSteps: %d\tNoise: %.3f\tActor WD: %.1e\tTime: %.1fs',
-                     i_episode, score, np.mean(scores_deque), t + 1, agent.noise_scale,
-                     agent.actor_weight_decay, time.time() - t0)
+            log.info('Episode %d\tScore: %.3f\tAverage (last 100): %.3f\tSteps: %d\tNoise: %.3f\tTime: %.1fs',
+                     i_episode, score, np.mean(scores_deque), t + 1, agent.noise_scale, time.time() - t0)
 
             # save regularly, so a crash loses at most --save-every episodes
             if i_episode % args.save_every == 0:
@@ -221,7 +205,8 @@ def main():
             if len(scores_deque) == 100 and np.mean(scores_deque) >= 0.5:
                 log.info('Environment solved at episode %d! Average of episodes %d-%d: %.3f',
                          i_episode, i_episode - 99, i_episode, np.mean(scores_deque))
-                # plain weights per agent (checkpoint_actor_0.pth, ...), for test.py and the submission
+                # plain weights, for test.py and the submission: checkpoint_actor.pth + checkpoint_critic.pth
+                # (with --separate: one pair per racket, checkpoint_actor_0.pth, ...)
                 agent.save_weights('checkpoint')
                 break
     except KeyboardInterrupt:

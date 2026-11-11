@@ -28,8 +28,9 @@ def parse_args():
     """Read the command-line options."""
     p = argparse.ArgumentParser(description='Test trained MADDPG agents on the Tennis environment.')
     p.add_argument('--env', default='Tennis_Linux/Tennis.x86_64', help='path to the Unity environment')
-    p.add_argument('--actors', nargs='+', default=['checkpoint_actor_0.pth', 'checkpoint_actor_1.pth'],
-                   help='trained actor weights, one file per agent (saved when the env is solved)')
+    p.add_argument('--actors', nargs='+',
+                   help='trained actor weights (saved when the env is solved). Default: checkpoint_actor.pth, '
+                        'or checkpoint_actor_0.pth checkpoint_actor_1.pth with --separate')
     p.add_argument('--checkpoint', help='load a full training checkpoint instead (e.g. checkpoint.pth)')
     p.add_argument('--separate', action='store_true',
                    help='the actors were trained with train.py --separate (only needed with --actors)')
@@ -63,8 +64,10 @@ def main():
         agent.load(args.checkpoint)
         print('Loaded {}'.format(args.checkpoint))
     else:
-        agent.load_actor_weights(args.actors)
-        print('Loaded {}'.format(', '.join(args.actors)))
+        # the same file names train.py writes: one file if shared, one per racket if separate
+        actor_files = args.actors or agent.weight_files('checkpoint', 'actor')
+        agent.load_actor_weights(actor_files)
+        print('Loaded {}'.format(', '.join(actor_files)))
 
     # ------------------------------- test -------------------------------- #
     # train_mode=False runs the simulation at normal speed, so it can be watched
