@@ -30,7 +30,7 @@ Tennis is symmetric: each agent observes the court from its own side. So **both 
 To make one critic usable for both agents, its input is always ordered with the learning agent first:
 `[own observation, other observation]` and `[own action, other action]`. Each update uses that agent's own reward and done flag.
 
-Sharing was the decisive design choice. In an earlier version with separate networks per agent, one agent learned to hit the ball while the other did not. Since rallies need both agents, the score stayed around 0.05. With shared networks, whatever one agent learns is immediately available to the other.
+This choice came from an observation. In an earlier version with separate networks per agent, the 100-episode average stalled around 0.05. Evaluated without noise, one agent hit the ball in 16 of 30 episodes and the other in only 3; since rallies need both agents, the score could not grow. After switching to shared networks (together with a slower noise decay, see 2.3), the environment was solved. With shared networks, whatever one agent learns is immediately available to the other.
 
 (`train.py --separate` trains separate networks per agent instead.)
 
@@ -109,7 +109,7 @@ For about 600 episodes the agents scored nothing. Once they started hitting the 
 
 ### Evaluation
 
-Run without exploration noise (`python test.py`), the trained agents scored **2.6, 2.7, 0.0, 2.6 and 2.7** in 5 episodes (average 2.12). The result is deterministic: the policy has no noise, and the environment starts with the same sequence of serves every time it is launched. Most serves lead to a full-length rally. One serve position (episode 3) is always missed.
+Run without exploration noise (`python test.py`), the trained agents scored **2.6, 2.7, 0.0, 2.6 and 2.7** in 5 episodes (average 2.12). Repeated runs give exactly the same scores: the policy has no noise, and the environment appears to start with the same sequence of serves every time it is launched. Most serves lead to a full-length rally. One serve position (episode 3) is always missed.
 
 ## 4. Ideas for Future Work
 

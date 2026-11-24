@@ -4,7 +4,7 @@
 
 # Project 3: Collaboration and Competition
 
-Two agents trained with MADDPG (Multi-Agent Deep Deterministic Policy Gradient) to play the Unity ML-Agents **Tennis** environment. The environment was solved in **896 episodes**. See [Report.md](Report.md) for the method, hyperparameters and results.
+Two agents trained with MADDPG (Multi-Agent Deep Deterministic Policy Gradient) to play the Unity ML-Agents **Tennis** environment. The environment was solved in **896 episodes**, after a 500-episode random warm-up that fills the replay buffer. See [Report.md](Report.md) for the method, hyperparameters and results.
 
 ![Trained Agent][image1]
 
