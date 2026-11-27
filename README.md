@@ -1,12 +1,10 @@
-[//]: # (Image References)
-
-[image1]: https://user-images.githubusercontent.com/10624937/42135623-e770e354-7d12-11e8-998d-29fc74429ca2.gif "Trained Agent"
-
 # Project 3: Collaboration and Competition
 
 Two agents trained with MADDPG (Multi-Agent Deep Deterministic Policy Gradient) to play the Unity ML-Agents **Tennis** environment. The environment was solved in **896 episodes**, after a 500-episode random warm-up that fills the replay buffer. See [Report.md](Report.md) for the method, hyperparameters and results.
 
-![Trained Agent][image1]
+![Trained agents](trained_agent.gif)
+
+*The trained agents playing without exploration noise (first 400 steps of an episode).*
 
 ## Project Details
 
@@ -68,6 +66,7 @@ Unzip it in the root of this repository. The default path is the Linux build, `T
 | `checkpoint_actor.pth`, `checkpoint_critic.pth` | Weights of the trained actor and critic |
 | `checkpoint.pth` | Full training checkpoint (networks, optimizers, score history) |
 | `scores.png`, `train.log` | Score plot and training log |
+| `trained_agent.gif` | Recording of the trained agents |
 | `Report.md` | Description of the implementation and results |
 
 ### Train the agents
